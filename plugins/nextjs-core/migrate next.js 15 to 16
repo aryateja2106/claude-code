@@ -1,0 +1,116 @@
+---
+description: Migrate a Next.js 15 project to Next.js 16 with automated middleware to proxy conversion
+---
+
+# Migrate Next.js 15 to 16
+
+Automatically migrate your Next.js 15 project to Next.js 16, handling breaking changes and deprecated features.
+
+## Instructions
+
+1. **Update dependencies:**
+   - Update `next` to version `^16.0.0`
+   - Update `react` and `react-dom` to compatible versions
+   - Update `@types/react` and `@types/react-dom` if using TypeScript
+   - Run `npm install` or `yarn install` to update lock files
+
+2. **Convert Middleware to Proxy:**
+   - Check for existing `middleware.ts` or `middleware.js` files
+   - Create new `proxy.ts` or `proxy.js` at the same location
+   - Rename exported function from `middleware` to `proxy`
+   - Update imports if necessary (NextResponse and NextRequest remain the same)
+   - Preserve existing matcher configuration
+   - Delete old middleware file after successful migration
+
+3. **Key migration changes to handle:**
+   - Replace `middleware()` function with `proxy()` function
+   - Update any references to middleware in documentation or comments
+   - Verify fetch options: `options.cache`, `options.next.revalidate`, and `options.next.tags` have no effect in proxy
+   - Check for slow data fetching or session management in existing middleware (these should be moved elsewhere)
+
+4. **Testing checklist:**
+   - Authentication/authorization flows still work
+   - Redirects function correctly
+   - Header modifications are applied
+   - Route matching works as expected
+   - No performance degradation
+
+5. **Common patterns to update:**
+   ```typescript
+   // Before (Next.js 15)
+   export function middleware(request: NextRequest) {
+     // logic
+   }
+   
+   // After (Next.js 16)
+   export function proxy(request: NextRequest) {
+     // same logic
+   }
+   ```
+
+## Migration Script Example
+
+```typescript
+// Old middleware.ts (Next.js 15)
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+
+export function middleware(request: NextRequest) {
+  // Check authentication
+  const token = request.cookies.get('auth-token')
+  
+  if (!token && request.nextUrl.pathname.startsWith('/dashboard')) {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+  
+  // Add custom headers
+  const response = NextResponse.next()
+  response.headers.set('x-custom-header', 'value')
+  
+  return response
+}
+
+export const config = {
+  matcher: ['/dashboard/:path*', '/api/protected/:path*'],
+}
+
+// ↓ Converts to ↓
+
+// New proxy.ts (Next.js 16)
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+
+export function proxy(request: NextRequest) {
+  // Check authentication
+  const token = request.cookies.get('auth-token')
+  
+  if (!token && request.nextUrl.pathname.startsWith('/dashboard')) {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+  
+  // Add custom headers
+  const response = NextResponse.next()
+  response.headers.set('x-custom-header', 'value')
+  
+  return response
+}
+
+export const config = {
+  matcher: ['/dashboard/:path*', '/api/protected/:path*'],
+}
+```
+
+## Post-Migration Validation
+
+1. Run `npm run build` or `yarn build` to ensure no build errors
+2. Test all protected routes
+3. Verify redirects and rewrites work correctly
+4. Check browser network tab for proper header modifications
+5. Monitor for any console warnings about deprecated features
+
+## Important Notes
+
+- **Proxy limitations:** Unlike middleware, proxy should not be used for slow data fetching or complex session management
+- **Single proxy file:** Only one `proxy.ts` file is supported per project, but you can organize logic into modules and import them
+- **Performance:** Proxy is optimized for quick operations like redirects and header modifications
+- **Async operations:** Mark the proxy function as `async` if using `await` inside
